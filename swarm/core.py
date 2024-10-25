@@ -82,7 +82,10 @@ class Swarm:
                 try:
                     return Result(value=str(result))
                 except Exception as e:
-                    error_message = f"Failed to cast response to string: {result}. Make sure agent functions return a string or Result object. Error: {str(e)}"
+                    error_message = (
+                        f"Failed to cast response to string: {result}. "
+                        f"Make sure agent functions return a string or Result object. Error: {str(e)}"
+                    )
                     debug_print(debug, error_message)
                     raise TypeError(error_message)
 
@@ -133,6 +136,9 @@ class Swarm:
             partial_response.context_variables.update(result.context_variables)
             if result.agent:
                 partial_response.agent = result.agent
+
+            if result.stop_reflection:
+                partial_response.stop_reflection = True
 
         return partial_response
 
@@ -211,7 +217,8 @@ class Swarm:
                 )
                 tool_calls.append(tool_call_object)
 
-            # handle function calls, updating context_variables, and switching agents
+            # handle function calls, updating context_variables, and switching
+            # agents
             partial_response = self.handle_tool_calls(
                 tool_calls, active_agent.functions, context_variables, debug
             )
@@ -272,18 +279,29 @@ class Swarm:
                 json.loads(message.model_dump_json())
             )  # to avoid OpenAI types (?)
 
-            if not message.tool_calls or not execute_tools:
+            # TODO: extract the check into a separate method
+            # Skip the exit condition if the agent has reflection
+            if not agent.has_reflection and (
+                    not message.tool_calls or not execute_tools):
                 debug_print(debug, "Ending turn.")
                 break
 
-            # handle function calls, updating context_variables, and switching agents
+            if not message.tool_calls:
+                continue
+
+            # handle function calls, updating context_variables, and switching
+            # agents
             partial_response = self.handle_tool_calls(
                 message.tool_calls, active_agent.functions, context_variables, debug
             )
             history.extend(partial_response.messages)
             context_variables.update(partial_response.context_variables)
+
             if partial_response.agent:
                 active_agent = partial_response.agent
+
+            if partial_response.stop_reflection:
+                break
 
         return Response(
             messages=history[init_len:],
