@@ -47,7 +47,10 @@ class Swarm:
         messages = [{"role": "system", "content": instructions}] + history
         debug_print(debug, "Getting chat completion for...:", messages)
 
-        tools = [function_to_json(f) for f in agent.functions]
+        tools = [
+            f.to_json() if hasattr(f, 'to_json') else function_to_json(f)
+            for f in agent.functions
+        ]
         # hide context_variables from model
         for tool in tools:
             params = tool["function"]["parameters"]
